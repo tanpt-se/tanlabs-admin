@@ -1,90 +1,95 @@
-# React + Vite + Hono + Cloudflare Workers
+# TanLabs Admin
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/cloudflare/templates/tree/main/vite-react-template)
+Admin console for TanLabs — React SPA on Cloudflare Workers with auth UI ported from [auth-lab](https://github.com/tanpt-se/auth-lab.git), backed by [tanlabs-api](https://github.com/tanpt-se/tanlabs-api.git).
 
-This template provides a minimal setup for building a React application with TypeScript and Vite, designed to run on Cloudflare Workers. It features hot module replacement, ESLint integration, and the flexibility of Workers deployments.
+## Prerequisites
 
-![React + TypeScript + Vite + Cloudflare Workers](https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/fc7b4b62-442b-4769-641b-ad4422d74300/public)
-
-<!-- dash-content-start -->
-
-🚀 Supercharge your web development with this powerful stack:
-
-- [**React**](https://react.dev/) - A modern UI library for building interactive interfaces
-- [**Vite**](https://vite.dev/) - Lightning-fast build tooling and development server
-- [**Hono**](https://hono.dev/) - Ultralight, modern backend framework
-- [**Cloudflare Workers**](https://developers.cloudflare.com/workers/) - Edge computing platform for global deployment
-
-### ✨ Key Features
-
-- 🔥 Hot Module Replacement (HMR) for rapid development
-- 📦 TypeScript support out of the box
-- 🛠️ ESLint configuration included
-- ⚡ Zero-config deployment to Cloudflare's global network
-- 🎯 API routes with Hono's elegant routing
-- 🔄 Full-stack development setup
-- 🔎 Built-in Observability to monitor your Worker
-
-Get started in minutes with local development or deploy directly via the Cloudflare dashboard. Perfect for building modern, performant web applications at the edge.
-
-<!-- dash-content-end -->
-
-## Getting Started
-
-To start a new project with this template, run:
-
-```bash
-npm create cloudflare@latest -- --template=cloudflare/templates/vite-react-template
-```
-
-A live deployment of this template is available at:
-[https://react-vite-template.templates.workers.dev](https://react-vite-template.templates.workers.dev)
+- Node.js 20+
+- pnpm
+- [tanlabs-api](https://github.com/tanpt-se/tanlabs-api) running locally
 
 ## Development
 
-Install dependencies:
+Start the API first (port **8787**):
 
 ```bash
-npm install
+cd ../tanlabs-api
+pnpm install
+pnpm dev
 ```
 
-Start the development server with:
+Then start the admin app (port **5102**):
 
 ```bash
-npm run dev
+pnpm install
+cp .dev.vars.example .dev.vars   # optional — default API_ORIGIN is localhost:8787
+pnpm dev
 ```
 
-Your application will be available at [http://localhost:5102](http://localhost:5102).
+Open [http://localhost:5102](http://localhost:5102).
 
-## Production
+### Seed credentials
 
-Build your project for production:
+| Email | Password | Role |
+|-------|----------|------|
+| `admin@example.com` | `Password123!` | admin |
+| `user@example.com` | `Password123!` | user (rejected on admin login) |
+
+## Architecture
+
+- **Frontend:** Vite + React 19 SPA
+- **Worker:** Hono proxy — browser calls `/api/*`, Worker forwards to `tanlabs-api`
+- **Auth:** JWT access token (in-memory) + HttpOnly refresh cookie (`admin_refresh_token`)
+
+All API traffic stays same-origin via the Worker proxy — no direct browser calls to `:8787`.
+
+## Routes
+
+| Path | Description |
+|------|-------------|
+| `/login` | Admin login (+ 2FA, Google OAuth when enabled) |
+| `/forgot-password` | Password recovery |
+| `/` | Dashboard |
+| `/my-account` | Profile, 2FA, Google link, session revoke |
+| `/auth/session-ended` | Clears cookies after forced logout |
+
+## Environment
+
+### Worker (`.dev.vars`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `API_ORIGIN` | `http://localhost:8787` | Upstream tanlabs-api URL |
+
+Production: set in `wrangler.json` → `env.production.vars`.
+
+### Frontend (`.env` — optional)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `VITE_API_BASE` | `/api` | API base path (Worker proxy) |
+| `VITE_AUTH_GOOGLE_ENABLED` | `false` | Show Google sign-in button |
+| `VITE_AUTH_CSRF_PROTECTION_ENABLED` | `false` | Send CSRF header on logout |
+
+## Google OAuth
+
+When enabling Google login:
+
+1. Set `VITE_AUTH_GOOGLE_ENABLED=true` in admin `.env`
+2. Configure tanlabs-api secrets:
+   - `GOOGLE_OAUTH_CLIENT_ID`
+   - `GOOGLE_OAUTH_CLIENT_SECRET`
+   - `GOOGLE_OAUTH_REDIRECT_URI=http://localhost:5102/api/auth/oauth/google/callback`
+
+Production redirect URI: `https://tanlabs-admin.nikinpham.com/api/auth/oauth/google/callback`
+
+## Deploy
 
 ```bash
-npm run build
+pnpm build
+pnpm deploy
 ```
 
-Preview your build locally:
+## i18n
 
-```bash
-npm run preview
-```
-
-Deploy your project to Cloudflare Workers:
-
-```bash
-npm run build && npm run deploy
-```
-
-Monitor your workers:
-
-```bash
-npx wrangler tail
-```
-
-## Additional Resources
-
-- [Cloudflare Workers Documentation](https://developers.cloudflare.com/workers/)
-- [Vite Documentation](https://vitejs.dev/guide/)
-- [React Documentation](https://reactjs.org/)
-- [Hono Documentation](https://hono.dev/)
+Supported locales: English, Vietnamese, Japanese, Korean — switch via the language menu on auth pages and dashboard.
